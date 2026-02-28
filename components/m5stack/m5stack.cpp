@@ -23,7 +23,12 @@ void fft_loop_task(void *vp_args)
     while (true)
     {
         // ESP_LOGI("FFT_LOOP","FFT LOOP");
-        audio_processing();
+        fft_processing(); 
+    }
+}
+void mfcc_loop_task(void *vp_args){
+    while(true){
+        mfcc_processing();
     }
 }
 void display_loop_task(void *vp_args)
@@ -58,5 +63,6 @@ void m5_device_init()
 
     xTaskCreatePinnedToCore(audio_loop_task, "AUDIO_LOOP", 8192, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(fft_loop_task, "FFT_LOOP", 8192, NULL, 7, NULL, 1);
+    xTaskCreatePinnedToCore(mfcc_loop_task, "MFCC_LOOP", 8192, NULL, 7, NULL, 1);
     xTaskCreatePinnedToCore(display_loop_task, "DISPLAY_LOOP", 4096, NULL, 5, NULL, 1);
 }

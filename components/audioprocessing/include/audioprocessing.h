@@ -7,6 +7,9 @@
 #define FFT_BITS 10
 #define FFT_SIZE (1u << FFT_BITS)
 
+#define MFCC_MEL_BINS 40
+#define MFCC_NUM_CEPS 13
+
 struct fft_data_t
 {
     float *fdata = nullptr;
@@ -61,7 +64,10 @@ public:
 };
 
 void audio_processing_init(void);
-void audio_processing();
-void give_audio_processing_semaphore();
+void fft_processing();
+void mfcc_processing();
+void give_fft_processing_semaphore();
+void give_mfcc_processing_semaphore();
 fft_data_t *get_fft_data();
+float *get_mfcc_data();
 #endif

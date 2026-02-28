@@ -7,11 +7,15 @@
 /*
 
 */
+#define TIME_STEPS 15
 
 wav_drawer_t wav_drawer;
 fft_drawer_t fft_drawer;
+
 fft_peak_t fft_peak;
 fft_history_t fft_history;
+mfcc_history_t mfcc_history;
+uint8_t *stripe_buf = nullptr;
 
 bool wav_drawer_t::setup(LGFX_Device *gfx, const rect_t &rect)
 {
@@ -221,12 +225,86 @@ bool fft_history_t::setup(LGFX_Device *gfx, const rect_t &rect)
     return true;
 }
 
+bool mfcc_history_t::setup(LGFX_Device *gfx, const rect_t &rect)
+{
+    if (gfx == nullptr)
+    {
+        return false;
+    }
+    _gfx = gfx;
+    draw_rect = rect;
+    int width = rect.w;
+    int height = rect.h;
+
+    color_map = (uint8_t *)heap_caps_malloc((width)*height * sizeof(uint8_t), MALLOC_CAP_8BIT);
+    memset(color_map, 0, width * height * sizeof(uint8_t));
+    return true;
+}
+
+bool mfcc_history_t::update(const float *mfcc_data)
+{
+    int32_t width = draw_rect.w;
+    int32_t height = draw_rect.h;
+
+    uint8_t STEP_PX = width/TIME_STEPS;
+    const int bins = MFCC_NUM_CEPS;
+
+    // 1️⃣ Shift image RIGHT by STEP_PX
+    for (int y = 0; y < height; y++)
+    {
+        memmove(
+            &color_map[y * width + STEP_PX],
+            &color_map[y * width],
+            width - STEP_PX);
+    }
+
+    // 2️⃣ Clear leftmost stripe
+    for (int y = 0; y < height; y++)
+    {
+        memset(&color_map[y * width], 0, STEP_PX);
+    }
+
+    // 3️⃣ Draw new MFCC bins into leftmost stripe
+    for (int i = 0; i < bins; i++)
+    {
+        int y = (i * height) / bins;
+
+        float v = mfcc_data[i];
+
+        if (v < -100.0f)
+            v = -100.0f;
+        if (v > 100.0f)
+            v = 100.0f;
+
+        uint8_t gray =
+            (uint8_t)((v + 100.0f) * 255.0f / 200.0f);
+
+        for (int x = 0; x < STEP_PX; x++)
+        {
+            color_map[y * width + x] = gray;
+        }
+    }
+
+    // 4️⃣ Push full image
+    _gfx->pushGrayscaleImage(
+        draw_rect.x,
+        draw_rect.y,
+        width,
+        height,
+        color_map,
+        m5gfx::color_depth_t::grayscale_8bit,
+        fg_color,
+        bg_color);
+    return true;
+}
+
 void display_init()
 {
     M5.Display.startWrite();
 
     int16_t w = M5.Display.width();
     int16_t h = M5.Display.height() >> 2;
+    printf("height:%d", h);
 
     rect_t rect_fft_peak = {0, 0, w, h};
     rect_t rect_fft_drawer = {0, h, w, h};
@@ -235,8 +313,11 @@ void display_init()
 
     fft_peak.setup(&M5.Display, rect_fft_peak);
     fft_drawer.setup(&M5.Display, rect_fft_drawer);
-    fft_history.setup(&M5.Display, rect_fft_history);
+    mfcc_history.setup(&M5.Display, rect_fft_history);
     wav_drawer.setup(&M5.Display, rect_wav_drawer);
+
+    uint8_t STEP_PX = w/TIME_STEPS;
+    stripe_buf = (uint8_t *)heap_caps_malloc(STEP_PX * h, MALLOC_CAP_8BIT);
 
     M5.Display.setTextSize(w / 64.0f, h / 16.0f);
     M5.Display.setFont(&fonts::AsciiFont8x16);
@@ -252,4 +333,7 @@ void display_update()
 
     fft_data_t *fft_data = get_fft_data();
     fft_drawer.update(*fft_data);
+
+    float *mfcc_data = get_mfcc_data();
+    mfcc_history.update(mfcc_data);
 }

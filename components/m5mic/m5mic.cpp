@@ -49,7 +49,7 @@ void get_audio()
         int wav_idx = wav_data.latest_index;
         if (M5.Mic.isRecording() < 2)
         {
-            ESP_LOGI("MIC", "MIC recording");
+            // ESP_LOGI("MIC", "MIC recording");
 
             if (M5.Mic.record(&(wav_data.wav[wav_idx]), WAVE_BLOCK_SIZE, SAMPLE_RATE))
             {
@@ -62,7 +62,8 @@ void get_audio()
 
                 if (sample_count >= 4)
                 {
-                    give_audio_processing_semaphore();
+                    give_fft_processing_semaphore();
+                    give_mfcc_processing_semaphore();
                 }
                 else
                 {

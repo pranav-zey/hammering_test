@@ -77,6 +77,20 @@ public:
     // bool update(const fft_data_t &fft_data);
 };
 
+class mfcc_history_t
+{
+    LGFX_Device *_gfx = nullptr;
+    uint8_t *color_map = nullptr;
+    rect_t draw_rect = {0, 0, 0, 0};
+    uint32_t bg_color = 0x000033u;
+    uint32_t fg_color = 0xFFFF00u;
+    int step = 0;
+
+public:
+    bool setup(LGFX_Device *gfx, const rect_t &rect);
+    bool update(const float *mfcc_data);
+};
+
 void display_init();
 
 void display_update();
