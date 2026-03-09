@@ -59,11 +59,12 @@ void get_audio()
                     wav_idx = 0; // fills in the old data.
                 }
                 wav_data.latest_index = wav_idx;
-
                 if (sample_count >= 4)
                 {
-                    give_fft_processing_semaphore();
-                    give_mfcc_processing_semaphore();
+                    give_hammer_detection_semaphore();
+
+                    // give_fft_processing_semaphore();
+                    // give_mfcc_processing_semaphore();
                 }
                 else
                 {

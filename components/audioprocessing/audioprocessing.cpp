@@ -14,6 +14,12 @@ static float mfcc_out[MFCC_NUM_CEPS];
 static int16_t prev_sample = 0;
 dl::audio::MFCC *mfcc_op = nullptr;
 
+wav_data_t impact_signal;
+int impact_duration = 20; // ms
+wav_data_t vibration_signal;
+int vibration_duration = 100; // ms
+
+SemaphoreHandle_t hammer_edge_detect_smphr = NULL;
 SemaphoreHandle_t fft_processing_smphr = NULL;
 SemaphoreHandle_t mfcc_processing_smphr = NULL;
 
@@ -96,7 +102,7 @@ bool mfcc_calc_function()
         snprintf(tmp, sizeof(tmp), " %.3f", mfcc_out[i]);
         strncat(mfcc_value, tmp, sizeof(mfcc_value) - strlen(mfcc_value) - 1);
     }
-    ESP_LOGI("AUDIO Processing", " MFCC Size:%d MFCC Values:%s", sizeof(mfcc_out) / sizeof(mfcc_out[0]), mfcc_value);
+    // ESP_LOGI("AUDIO Processing", " MFCC Size:%d MFCC Values:%s", sizeof(mfcc_out) / sizeof(mfcc_out[0]), mfcc_value);
     // ESP_LOGI("AUDIO Processing", "%s", mfcc_value);
     return true;
 }
@@ -105,6 +111,20 @@ void audio_processing_init()
 {
 
     wave_data = get_wav_data();
+
+    while (hammer_edge_detect_smphr == NULL)
+    {
+        hammer_edge_detect_smphr = xSemaphoreCreateBinary();
+    }
+
+    impact_signal.length = SAMPLE_RATE * impact_duration / 1000;
+    impact_signal.wav = (typeof(impact_signal.wav))heap_caps_malloc(impact_signal.length * sizeof(impact_signal.wav[0]), MALLOC_CAP_8BIT);
+    memset(impact_signal.wav, 0, WAVE_TOTAL_SIZE * sizeof(int16_t));
+
+    vibration_signal.length = SAMPLE_RATE * vibration_duration / 1000;
+    vibration_signal.wav = (typeof(vibration_signal.wav))heap_caps_malloc(vibration_signal.length * sizeof(vibration_signal.wav[0]), MALLOC_CAP_8BIT);
+    memset(vibration_signal.wav, 0, WAVE_TOTAL_SIZE * sizeof(int16_t));
+
     // FFT initialization
     fft_function.setup(FFT_BITS);
 
@@ -154,6 +174,71 @@ void mfcc_processing()
     }
 }
 
+void detect_hammer_edge()
+{
+    if (xSemaphoreTake(hammer_edge_detect_smphr, portMAX_DELAY))
+    {
+
+        size_t start = (wave_data->length + wave_data->latest_index - WAVE_BLOCK_SIZE) % wave_data->length;
+        int lower_bound = abs(wave_data->wav[start]);
+        int upper_bound = abs(wave_data->wav[start]);
+        int lower_bound_index = start;
+        bool transient_detected = false;
+        for (size_t i = 1; i < WAVE_BLOCK_SIZE; i++)
+        {
+            int value = abs(wave_data->wav[(start + i) % wave_data->length]);
+            if (value < upper_bound)
+            {
+                lower_bound = value;
+                lower_bound_index = (start + i) % wave_data->length;
+                upper_bound = value;
+            }
+            else
+            {
+                upper_bound = value;
+            }
+            int lower_energy = lower_bound * lower_bound;
+            int upper_energy = upper_bound * upper_bound;
+            int energy_difference = upper_bound - lower_bound;
+            if (energy_difference > TRANSIENT_ENERGY_THERSHOLD)
+            {
+                ESP_LOGI("TRANSIENT", " Transient detected:%d, lower bound: %d, upper bound: %d", energy_difference, lower_energy, upper_energy);
+                transient_detected = true;
+                break;
+            }
+        }
+
+        if (!transient_detected)
+        {
+            return;
+        }
+
+        int count = 0;
+        while (count < impact_signal.length)
+        {
+            if (count != 0)
+                xSemaphoreTake(hammer_edge_detect_smphr, portMAX_DELAY); // wait for new sample.
+
+            // copy the new samples into the buffer.
+            // memcpy(&impact_signal.wav[0],&(wave_data->wav[lower_bound_index]),  );
+            // get the required number of impact signal samples.
+        }
+
+        count = 0;
+        while (count < vibration_signal.length)
+        {
+            if (count != 0)
+                xSemaphoreTake(hammer_edge_detect_smphr, portMAX_DELAY);
+
+            // memcpy();
+            // get the required number of vibration signal samples.
+        }
+    }
+}
+void give_hammer_detection_semaphore()
+{
+    xSemaphoreGive(hammer_edge_detect_smphr);
+}
 void give_fft_processing_semaphore()
 {
     xSemaphoreGive(fft_processing_smphr);

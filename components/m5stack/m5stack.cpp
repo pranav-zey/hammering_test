@@ -18,6 +18,12 @@ void audio_loop_task(void *vp_args)
     }
     vTaskDelete(NULL);
 }
+void edge_detection_task(void *vp_args){
+    while(true){
+
+        detect_hammer_edge();
+    }
+}
 void fft_loop_task(void *vp_args)
 {
     while (true)
@@ -62,6 +68,7 @@ void m5_device_init()
     audio_processing_init();
 
     xTaskCreatePinnedToCore(audio_loop_task, "AUDIO_LOOP", 8192, NULL, 10, NULL, 0);
+    xTaskCreatePinnedToCore(edge_detection_task, "FFT_LOOP", 8192, NULL, 7, NULL, 1);
     xTaskCreatePinnedToCore(fft_loop_task, "FFT_LOOP", 8192, NULL, 7, NULL, 1);
     xTaskCreatePinnedToCore(mfcc_loop_task, "MFCC_LOOP", 8192, NULL, 7, NULL, 1);
     xTaskCreatePinnedToCore(display_loop_task, "DISPLAY_LOOP", 4096, NULL, 5, NULL, 1);

@@ -120,8 +120,6 @@ bool wav_drawer_t::update(const wav_data_t &wav_data)
     }
 
     return true;
-
-    return false;
 }
 
 bool fft_drawer_t::setup(LGFX_Device *gfx, const rect_t &rect)

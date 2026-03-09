@@ -10,6 +10,7 @@
 #define MFCC_MEL_BINS 40
 #define MFCC_NUM_CEPS 13
 
+#define TRANSIENT_ENERGY_THERSHOLD 1000
 struct fft_data_t
 {
     float *fdata = nullptr;
@@ -66,6 +67,8 @@ public:
 void audio_processing_init(void);
 void fft_processing();
 void mfcc_processing();
+void detect_hammer_edge();
+void give_hammer_detection_semaphore();
 void give_fft_processing_semaphore();
 void give_mfcc_processing_semaphore();
 fft_data_t *get_fft_data();

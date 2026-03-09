@@ -88,6 +88,6 @@ struct wav_data_t
 
 void audio_init();
 void get_audio(void);
-wav_data_t* get_wav_data();
+wav_data_t *get_wav_data();
 
 #endif
