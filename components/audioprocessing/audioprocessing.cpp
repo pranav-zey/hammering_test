@@ -119,11 +119,11 @@ void audio_processing_init()
 
     impact_signal.length = SAMPLE_RATE * impact_duration / 1000;
     impact_signal.wav = (typeof(impact_signal.wav))heap_caps_malloc(impact_signal.length * sizeof(impact_signal.wav[0]), MALLOC_CAP_8BIT);
-    memset(impact_signal.wav, 0, WAVE_TOTAL_SIZE * sizeof(int16_t));
+    memset(impact_signal.wav, 0, impact_signal.length * sizeof(int16_t));
 
     vibration_signal.length = SAMPLE_RATE * vibration_duration / 1000;
     vibration_signal.wav = (typeof(vibration_signal.wav))heap_caps_malloc(vibration_signal.length * sizeof(vibration_signal.wav[0]), MALLOC_CAP_8BIT);
-    memset(vibration_signal.wav, 0, WAVE_TOTAL_SIZE * sizeof(int16_t));
+    memset(vibration_signal.wav, 0, vibration_signal.length * sizeof(int16_t));
 
     // FFT initialization
     fft_function.setup(FFT_BITS);
@@ -203,6 +203,9 @@ void detect_hammer_edge()
             if (energy_difference > TRANSIENT_ENERGY_THERSHOLD)
             {
                 ESP_LOGI("TRANSIENT", " Transient detected:%d, lower bound: %d, upper bound: %d", energy_difference, lower_energy, upper_energy);
+                // Reset the impact signal and vibration signal to read the new samples.
+                impact_signal.latest_index = 0;
+                vibration_signal.latest_index = 0; 
                 transient_detected = true;
                 break;
             }
@@ -213,24 +216,125 @@ void detect_hammer_edge()
             return;
         }
 
-        int count = 0;
-        while (count < impact_signal.length)
+        ESP_LOGI("TRANSIENT", " Transient processing");
+        int vibration_start_index = 0;
+        bool complete_samples = false;
+        while (impact_signal.latest_index < impact_signal.length)
         {
-            if (count != 0)
+            int start_index = lower_bound_index;
+            if (impact_signal.latest_index != 0) // if buffer is filling for the first time.
+            {
                 xSemaphoreTake(hammer_edge_detect_smphr, portMAX_DELAY); // wait for new sample.
+                start_index = wave_data->latest_index - WAVE_BLOCK_SIZE; // if reading for second time then the start index should be start of new block
+            }
+            if (wave_data->latest_index > start_index) // there data in no wrapped around the buffer.
+            {
+                for (int i = start_index; i < wave_data->latest_index; i++)
+                {
+                    impact_signal.wav[impact_signal.latest_index] = wave_data->wav[i]; // copy the data
+                    impact_signal.latest_index++;
+                    // if the impact_signal length is staisfied: exit
+                    if (impact_signal.latest_index == impact_signal.length) // buffer is completely filled.
+                    {
+                        vibration_start_index = i + 1;
+                        complete_samples = true;
+                        break;
+                    }
+                }
+            }
+            else // data is wrapped around the buffer.
+            {
+                // samples from the point of start to end of the audio buffer
+                for (int i = start_index; i < wave_data->length; i++)
+                {
+                    impact_signal.wav[impact_signal.latest_index] = wave_data->wav[i];
+                    impact_signal.latest_index++;
+                    // if the impact_signal length is staisfied: exit
+                    if (impact_signal.latest_index == impact_signal.length)
+                    {
+                        vibration_start_index = i + 1;
+                        complete_samples = true;
+                        break;
+                    }
+                }
+                // samples from start of the buffer to end of new index.
+                for (int i = 0; i < wave_data->latest_index; i++)
+                {
+                    impact_signal.wav[impact_signal.latest_index] = wave_data->wav[i];
+                    impact_signal.latest_index++;
+                    // if the impact_signal length is staisfied: exit
+                    if (impact_signal.latest_index == impact_signal.length)
+                    {
+                        vibration_start_index = i + 1;
+                        complete_samples = true;
+                        break;
+                    }
+                }
+            }
 
-            // copy the new samples into the buffer.
-            // memcpy(&impact_signal.wav[0],&(wave_data->wav[lower_bound_index]),  );
-            // get the required number of impact signal samples.
+            if (complete_samples)
+            {
+                ESP_LOGI("IMPACT SAMPLES", "Number of samples:%d", impact_signal.latest_index);
+                break;
+            }
         }
 
-        count = 0;
-        while (count < vibration_signal.length)
+        complete_samples = false;
+        while (vibration_signal.latest_index < vibration_signal.length)
         {
-            if (count != 0)
+            int start_index = vibration_start_index;
+            if (vibration_signal.latest_index != 0)
+            {
                 xSemaphoreTake(hammer_edge_detect_smphr, portMAX_DELAY);
+                start_index = wave_data->latest_index - WAVE_BLOCK_SIZE;
+            }
 
-            // memcpy();
+            if (wave_data->latest_index > start_index) // there data in no wrapped around the buffer.
+            {
+                for (int i = start_index; i < wave_data->latest_index; i++)
+                {
+                    vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i]; // copy the data
+                    vibration_signal.latest_index++;
+                    // if the impact_signal length is staisfied: exit
+                    if (vibration_signal.latest_index == vibration_signal.length) // buffer is completely filled.
+                    {
+                        complete_samples = true;
+                        break;
+                    }
+                }
+            }
+            else // data is wrapped around the buffer.
+            {
+                // samples from the point of start to end of the audio buffer
+                for (int i = start_index; i < wave_data->length; i++)
+                {
+                    vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
+                    vibration_signal.latest_index++;
+                    // if the impact_signal length is staisfied: exit
+                    if (vibration_signal.latest_index == vibration_signal.length)
+                    {
+                        complete_samples = true;
+                        break;
+                    }
+                }
+                // samples from start of the buffer to end of new index.
+                for (int i = 0; i < wave_data->latest_index; i++)
+                {
+                    vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
+                    vibration_signal.latest_index++;
+                    // if the impact_signal length is staisfied: exit
+                    if (vibration_signal.latest_index == vibration_signal.length)
+                    {
+                        complete_samples = true;
+                        break;
+                    }
+                }
+            }
+            if (complete_samples)
+            {
+                ESP_LOGI("VIBRATION SAMPLES", "Number of samples:%d", vibration_signal.latest_index);
+                break;
+            }
             // get the required number of vibration signal samples.
         }
     }
