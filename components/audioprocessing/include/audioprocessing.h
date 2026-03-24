@@ -14,6 +14,7 @@
 struct fft_data_t
 {
     float *fdata = nullptr;
+    float dominant_frequency = 0;
     size_t length = 0;
     size_t sample_rate;
 

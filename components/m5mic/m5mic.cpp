@@ -63,8 +63,8 @@ void get_audio()
                 {
                     give_hammer_detection_semaphore();
 
-                    // give_fft_processing_semaphore();
-                    // give_mfcc_processing_semaphore();
+                    give_fft_processing_semaphore();
+                    give_mfcc_processing_semaphore();
                 }
                 else
                 {

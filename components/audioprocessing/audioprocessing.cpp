@@ -69,14 +69,42 @@ __attribute__((optimize("O3"))) bool fft_function_t::update(fft_data_t *fft_data
 
     // 4. Calculate Magnitude
     // The output is mirrored; we only need the first half (0 to N/2)
+    float max_value = 0;
+
     for (int i = 0; i < n / 2; i++)
     {
         float re = _input_buffer[i * 2];
         float im = _input_buffer[i * 2 + 1];
         // Calculate magnitude: sqrt(re^2 + im^2)
-        fft_data->fdata[i] = sqrtf(re * re + im * im);
+        float mag = sqrtf(re * re + im * im);
+        fft_data->fdata[i] = mag;
+
+        if (mag > max_value)
+        {
+            max_value = mag;
+        }
     }
 
+    float threshold = 0.3 * max_value;
+    float sum = 0;
+    float weighted = 0;
+
+    for (int i = 1; i < n / 2; i++)
+    {
+        float mag = fft_data->fdata[i];
+        if (mag > threshold)
+        {
+            float freq = (float)i * SAMPLE_RATE / n;
+            sum += mag;
+            weighted += freq * mag;
+        }
+    }
+    if (sum > 0)
+        fft_data->dominant_frequency = weighted / sum;
+    else
+        fft_data->dominant_frequency = 0;
+
+    ESP_LOGI("FFT", "Dominant Frequency: %f", fft_data->dominant_frequency);
     return true;
 }
 
@@ -205,7 +233,7 @@ void detect_hammer_edge()
                 ESP_LOGI("TRANSIENT", " Transient detected:%d, lower bound: %d, upper bound: %d", energy_difference, lower_energy, upper_energy);
                 // Reset the impact signal and vibration signal to read the new samples.
                 impact_signal.latest_index = 0;
-                vibration_signal.latest_index = 0; 
+                vibration_signal.latest_index = 0;
                 transient_detected = true;
                 break;
             }
@@ -236,7 +264,7 @@ void detect_hammer_edge()
                     // if the impact_signal length is staisfied: exit
                     if (impact_signal.latest_index == impact_signal.length) // buffer is completely filled.
                     {
-                        vibration_start_index = i + 1;
+                        vibration_start_index = (i + 1) % wave_data->length;
                         complete_samples = true;
                         break;
                     }
@@ -252,7 +280,7 @@ void detect_hammer_edge()
                     // if the impact_signal length is staisfied: exit
                     if (impact_signal.latest_index == impact_signal.length)
                     {
-                        vibration_start_index = i + 1;
+                        vibration_start_index = (i + 1) % wave_data->length;
                         complete_samples = true;
                         break;
                     }
@@ -265,7 +293,7 @@ void detect_hammer_edge()
                     // if the impact_signal length is staisfied: exit
                     if (impact_signal.latest_index == impact_signal.length)
                     {
-                        vibration_start_index = i + 1;
+                        vibration_start_index = (i + 1) % wave_data->length;
                         complete_samples = true;
                         break;
                     }
