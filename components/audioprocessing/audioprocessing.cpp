@@ -6,13 +6,18 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <dl_mfcc.hpp>
+#include <list>
 
 fft_function_t fft_function;
 wav_data_t *wave_data;
 fft_data_t fft_data;
+float impact_mfcc_out[MFCC_NUM_CEPS];
+float vibration_mfcc_out[MFCC_NUM_CEPS];
 static float mfcc_out[MFCC_NUM_CEPS];
 static int16_t prev_sample = 0;
 dl::audio::MFCC *mfcc_op = nullptr;
+dl::audio::MFCC *impact_mfcc_op = nullptr;
+dl::audio::MFCC *vibration_mfcc_op = nullptr;
 
 wav_data_t impact_signal;
 int impact_duration = 20; // ms
@@ -107,6 +112,21 @@ __attribute__((optimize("O3"))) bool fft_function_t::update(fft_data_t *fft_data
     ESP_LOGI("FFT", "Dominant Frequency: %f", fft_data->dominant_frequency);
     return true;
 }
+bool mfcc_calc_function(wav_data_t *sound_data, bool is_impact)
+{
+    ESP_LOGI("MFCC", "Calculating MFCC");
+    if (is_impact)
+    {
+        // impact
+        impact_mfcc_op->process_frame(sound_data->wav, sound_data->length, impact_mfcc_out);
+    }
+    else
+    {
+        // vibration
+        vibration_mfcc_op->process_frame(sound_data->wav, sound_data->length, vibration_mfcc_out);
+    }
+    return true;
+}
 
 bool mfcc_calc_function()
 {
@@ -174,9 +194,18 @@ void audio_processing_init()
     speech_features_t.num_ceps = MFCC_NUM_CEPS;
     speech_features_t.low_freq = 0.0f;
     speech_features_t.high_freq = SAMPLE_RATE * 0.5f;
-
     mfcc_op = new dl::audio::MFCC(speech_features_t);
-    mfcc_op->print_config();
+    // mfcc_op->print_config();
+
+    // mfcc initalization for impact duration processing
+    speech_features_t.frame_length = impact_duration;
+    speech_features_t.frame_shift = impact_duration;
+    impact_mfcc_op = new dl::audio::MFCC(speech_features_t);
+
+    // mfcc initalization for vibration duration processing
+    speech_features_t.frame_length = vibration_duration;
+    speech_features_t.frame_shift = vibration_duration;
+    vibration_mfcc_op = new dl::audio::MFCC(speech_features_t);
 
     while (mfcc_processing_smphr == NULL)
     {
@@ -363,8 +392,17 @@ void detect_hammer_edge()
                 ESP_LOGI("VIBRATION SAMPLES", "Number of samples:%d", vibration_signal.latest_index);
                 break;
             }
-            // get the required number of vibration signal samples.
         }
+        // impact signal analysis
+        // caclulate FFT for all the samples
+        // calculate MFCC for all the samples
+        mfcc_calc_function(&impact_signal, true);
+        // vibration signal analysis
+        // caclulate FFT for all the samples
+        // calculate MFCC for all the samples
+        mfcc_calc_function(&vibration_signal, false);
+
+        // ML model inference
     }
 }
 void give_hammer_detection_semaphore()

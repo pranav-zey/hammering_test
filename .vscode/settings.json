@@ -1,5 +1,7 @@
 {
     "idf.currentSetup": "/home/ubuntu-fpga/.espressif/v5.5.2/esp-idf",
     "idf.port": "/dev/ttyUSB0",
-    "idf.flashType": "UART"
+    "idf.flashType": "UART",
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.defaultPackageManager": "ms-python.python:pip"
 }
