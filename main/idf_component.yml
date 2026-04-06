@@ -1,6 +1,5 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  espressif/esp-dl: ^3.2.4
   ## Required IDF version
   idf:
     version: '>=4.1.0'
@@ -15,5 +14,6 @@ dependencies:
   #   # `public` flag doesn't have an effect dependencies of the `main` component.
   #   # All dependencies of `main` are public by default.
   #   public: true
-  m5stack/m5unified: ^0.2.11
-  m5stack/m5gfx: ^0.2.17
+  m5stack/m5unified: ^0.2.13
+  m5stack/m5gfx: ^0.2.19
+  espressif/esp-dl: ^3.3.0

@@ -2,54 +2,12 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "m5stack.h"
+#include "M5Unified.h"
 #include "M5GFX.h"
-#include "m5display.h"
+// #include "m5display.h"
 #include "m5mic.h"
 #include "audioprocessing.h"
 
-static wav_data_t wav_data;
-
-void audio_loop_task(void *vp_args)
-{
-    while (true)
-    {
-        get_audio();
-        vTaskDelay(pdMS_TO_TICKS(15));
-    }
-    vTaskDelete(NULL);
-}
-void edge_detection_task(void *vp_args)
-{
-    while (true)
-    {
-
-        detect_hammer_edge();
-    }
-}
-void fft_loop_task(void *vp_args)
-{
-    while (true)
-    {
-        // ESP_LOGI("FFT_LOOP","FFT LOOP");
-        fft_processing();
-    }
-}
-void mfcc_loop_task(void *vp_args)
-{
-    while (true)
-    {
-        mfcc_processing();
-    }
-}
-void display_loop_task(void *vp_args)
-{
-    while (true)
-    {
-        // ESP_LOGI("DISPLAY LOOP","Just got here");
-        display_update();
-        vTaskDelay(pdMS_TO_TICKS(35));
-    }
-}
 
 void m5_device_init()
 {
@@ -65,7 +23,7 @@ void m5_device_init()
 
     M5.begin(cfg);
 
-    display_init();
+    // display_init();
 
     audio_init();
 
@@ -73,7 +31,5 @@ void m5_device_init()
 
     xTaskCreatePinnedToCore(audio_loop_task, "AUDIO_LOOP", 8192, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(edge_detection_task, "FFT_LOOP", 16384, NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(fft_loop_task, "FFT_LOOP", 8192, NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(mfcc_loop_task, "MFCC_LOOP", 8192, NULL, 7, NULL, 1);
-    xTaskCreatePinnedToCore(display_loop_task, "DISPLAY_LOOP", 4096, NULL, 5, NULL, 1);
+    // xTaskCreatePinnedToCore(display_loop_task, "DISPLAY_LOOP", 4096, NULL, 5, NULL, 1);
 }

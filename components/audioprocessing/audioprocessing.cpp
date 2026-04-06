@@ -1,235 +1,26 @@
 #include <stdio.h>
 #include "audioprocessing.h"
 #include <esp_err.h>
-#include <esp_dsp.h>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include <dl_mfcc.hpp>
-#include <list>
+#include "m5mic.h"
+#include "esp_log.h"
+#include "mfcc_op.h"
+#include "fft_op.h"
 
-fft_function_t fft_function;
+#define TRANSIENT_ENERGY_THERSHOLD 1000
+
+
+fft_function_t impact_fft_operator;
+fft_function_t vibration_fft_operator;
+
 wav_data_t *wave_data;
-fft_data_t fft_data;
-float impact_mfcc_out[MFCC_NUM_CEPS];
-float vibration_mfcc_out[MFCC_NUM_CEPS];
-static float mfcc_out[MFCC_NUM_CEPS];
-static int16_t prev_sample = 0;
-dl::audio::MFCC *mfcc_op = nullptr;
-dl::audio::MFCC *impact_mfcc_op = nullptr;
-dl::audio::MFCC *vibration_mfcc_op = nullptr;
 
 wav_data_t impact_signal;
-int impact_duration = 20; // ms
 wav_data_t vibration_signal;
-int vibration_duration = 100; // ms
 
 SemaphoreHandle_t hammer_edge_detect_smphr = NULL;
-SemaphoreHandle_t fft_processing_smphr = NULL;
-SemaphoreHandle_t mfcc_processing_smphr = NULL;
-
-bool fft_function_t::setup(uint8_t max_fft_size_bits)
-{
-    int fft_size = 1 << max_fft_size_bits;
-
-    // 1. Initialize the DSP library tables
-    esp_err_t ret = dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
-    if (ret != ESP_OK)
-        return false;
-
-    // 2. Allocate memory for windowing and processing
-    // esp-dsp FFT works on complex numbers (Real, Imag, Real, Imag...)
-    _input_buffer = (float *)heap_caps_malloc(fft_size * 2 * sizeof(float), MALLOC_CAP_8BIT);
-    _window = (float *)heap_caps_malloc(fft_size * sizeof(float), MALLOC_CAP_8BIT);
-
-    // 3. Pre-calculate a Hann window (improvement discussed earlier!)
-    dsps_wind_hann_f32(_window, fft_size);
-
-    _current_fft_size = fft_size;
-
-    return (_input_buffer && _window);
-}
-
-__attribute__((optimize("O3"))) bool fft_function_t::update(fft_data_t *fft_data)
-{
-    int n = 1 << fft_data->fft_size_bits;
-    static int16_t src[FFT_SIZE];
-    size_t start = (fft_data->wav_data->latest_index + fft_data->wav_data->length - FFT_SIZE) % fft_data->wav_data->length;
-    for (int i = 0; i < FFT_SIZE; i++)
-    {
-        src[i] = fft_data->wav_data->wav[(start + i) % fft_data->wav_data->length];
-    }
-
-    for (int i = 0; i < n; i++)
-    {
-        _input_buffer[i * 2] = (float)src[i] * _window[i];
-        _input_buffer[i * 2 + 1] = 0;
-    }
-
-    // 2. Execute the FFT (Radix-2)
-    dsps_fft2r_fc32(_input_buffer, n);
-
-    // 3. Bit-reversal (Required by esp-dsp for 2r)
-    dsps_bit_rev_fc32(_input_buffer, n);
-
-    // 4. Calculate Magnitude
-    // The output is mirrored; we only need the first half (0 to N/2)
-    float max_value = 0;
-
-    for (int i = 0; i < n / 2; i++)
-    {
-        float re = _input_buffer[i * 2];
-        float im = _input_buffer[i * 2 + 1];
-        // Calculate magnitude: sqrt(re^2 + im^2)
-        float mag = sqrtf(re * re + im * im);
-        fft_data->fdata[i] = mag;
-
-        if (mag > max_value)
-        {
-            max_value = mag;
-        }
-    }
-
-    float threshold = 0.3 * max_value;
-    float sum = 0;
-    float weighted = 0;
-
-    for (int i = 1; i < n / 2; i++)
-    {
-        float mag = fft_data->fdata[i];
-        if (mag > threshold)
-        {
-            float freq = (float)i * SAMPLE_RATE / n;
-            sum += mag;
-            weighted += freq * mag;
-        }
-    }
-    if (sum > 0)
-        fft_data->dominant_frequency = weighted / sum;
-    else
-        fft_data->dominant_frequency = 0;
-
-    ESP_LOGI("FFT", "Dominant Frequency: %f", fft_data->dominant_frequency);
-    return true;
-}
-bool mfcc_calc_function(wav_data_t *sound_data, bool is_impact)
-{
-    ESP_LOGI("MFCC", "Calculating MFCC");
-    if (is_impact)
-    {
-        // impact
-        impact_mfcc_op->process_frame(sound_data->wav, sound_data->length, impact_mfcc_out);
-    }
-    else
-    {
-        // vibration
-        vibration_mfcc_op->process_frame(sound_data->wav, sound_data->length, vibration_mfcc_out);
-    }
-    return true;
-}
-
-bool mfcc_calc_function()
-{
-    dl::audio::SpeechFeatureConfig mfcc_op_config = mfcc_op->config();
-    int frame_len = mfcc_op_config.frame_length * SAMPLE_RATE / 1000;
-
-    int16_t mfcc_frame[frame_len];
-    size_t start = (wave_data->latest_index - frame_len + wave_data->length) % wave_data->length;
-
-    for (int i = 0; i < frame_len; i++)
-    {
-        mfcc_frame[i] = wave_data->wav[(start + i) % wave_data->length];
-    }
-    // ESP_LOGI("AUDIO", "sample[0]=%d sample[1]=%d", mfcc_frame[0], mfcc_frame[1]);
-    mfcc_op->process_frame(mfcc_frame, frame_len, mfcc_out, prev_sample);
-    prev_sample = mfcc_frame[frame_len - 1];
-    char mfcc_value[150] = {0};
-    char tmp[32];
-    for (int i = 0; i < MFCC_NUM_CEPS; i++)
-    {
-        snprintf(tmp, sizeof(tmp), " %.3f", mfcc_out[i]);
-        strncat(mfcc_value, tmp, sizeof(mfcc_value) - strlen(mfcc_value) - 1);
-    }
-    // ESP_LOGI("AUDIO Processing", " MFCC Size:%d MFCC Values:%s", sizeof(mfcc_out) / sizeof(mfcc_out[0]), mfcc_value);
-    // ESP_LOGI("AUDIO Processing", "%s", mfcc_value);
-    return true;
-}
-
-void audio_processing_init()
-{
-
-    wave_data = get_wav_data();
-
-    while (hammer_edge_detect_smphr == NULL)
-    {
-        hammer_edge_detect_smphr = xSemaphoreCreateBinary();
-    }
-
-    impact_signal.length = SAMPLE_RATE * impact_duration / 1000;
-    impact_signal.wav = (typeof(impact_signal.wav))heap_caps_malloc(impact_signal.length * sizeof(impact_signal.wav[0]), MALLOC_CAP_8BIT);
-    memset(impact_signal.wav, 0, impact_signal.length * sizeof(int16_t));
-
-    vibration_signal.length = SAMPLE_RATE * vibration_duration / 1000;
-    vibration_signal.wav = (typeof(vibration_signal.wav))heap_caps_malloc(vibration_signal.length * sizeof(vibration_signal.wav[0]), MALLOC_CAP_8BIT);
-    memset(vibration_signal.wav, 0, vibration_signal.length * sizeof(int16_t));
-
-    // FFT initialization
-    fft_function.setup(FFT_BITS);
-
-    fft_data.fft_size_bits = FFT_BITS;
-    fft_data.sample_rate = SAMPLE_RATE;
-    fft_data.wav_data = wave_data;
-    fft_data.length = (1 << (fft_data.fft_size_bits - 1)) + 1;
-    fft_data.fdata = (typeof(fft_data.fdata))heap_caps_malloc(WAVE_TOTAL_SIZE * sizeof(fft_data.fdata[0]), MALLOC_CAP_8BIT);
-    while (fft_processing_smphr == NULL)
-    {
-        fft_processing_smphr = xSemaphoreCreateBinary();
-    }
-    // mfcc initialization
-    dl::audio::SpeechFeatureConfig speech_features_t;
-    speech_features_t.sample_rate = SAMPLE_RATE;
-    speech_features_t.frame_length = (FFT_SIZE * 1000) / SAMPLE_RATE;       // ≈ 21 ms
-    speech_features_t.frame_shift = (WAVE_BLOCK_SIZE * 1000) / SAMPLE_RATE; // ≈ 10 ms
-    speech_features_t.num_mel_bins = MFCC_MEL_BINS;
-    speech_features_t.num_ceps = MFCC_NUM_CEPS;
-    speech_features_t.low_freq = 0.0f;
-    speech_features_t.high_freq = SAMPLE_RATE * 0.5f;
-    mfcc_op = new dl::audio::MFCC(speech_features_t);
-    // mfcc_op->print_config();
-
-    // mfcc initalization for impact duration processing
-    speech_features_t.frame_length = impact_duration;
-    speech_features_t.frame_shift = impact_duration;
-    impact_mfcc_op = new dl::audio::MFCC(speech_features_t);
-
-    // mfcc initalization for vibration duration processing
-    speech_features_t.frame_length = vibration_duration;
-    speech_features_t.frame_shift = vibration_duration;
-    vibration_mfcc_op = new dl::audio::MFCC(speech_features_t);
-
-    while (mfcc_processing_smphr == NULL)
-    {
-        mfcc_processing_smphr = xSemaphoreCreateBinary();
-    }
-}
-
-void fft_processing()
-{
-    if (xSemaphoreTake(fft_processing_smphr, portMAX_DELAY))
-    {
-        // ESP_LOGI("AUDIO_PROCESSING", "Execution FFT");
-        fft_function.update(&fft_data);
-    }
-}
-
-void mfcc_processing()
-{
-    if (xSemaphoreTake(mfcc_processing_smphr, portMAX_DELAY))
-    {
-        // ESP_LOGI("AUDIO_PROCESSING", "Executing mfcc");
-        mfcc_calc_function();
-    }
-}
 
 void detect_hammer_edge()
 {
@@ -395,35 +186,53 @@ void detect_hammer_edge()
         }
         // impact signal analysis
         // caclulate FFT for all the samples
+        impact_fft_operator.calculate_fft(&impact_signal);
         // calculate MFCC for all the samples
         mfcc_calc_function(&impact_signal, true);
         // vibration signal analysis
         // caclulate FFT for all the samples
+        vibration_fft_operator.calculate_fft(&vibration_signal);
         // calculate MFCC for all the samples
         mfcc_calc_function(&vibration_signal, false);
 
         // ML model inference
     }
 }
+
+void audio_processing_init()
+{
+    wave_data = get_wav_data();
+
+    while (hammer_edge_detect_smphr == NULL)
+    {
+        hammer_edge_detect_smphr = xSemaphoreCreateBinary();
+    }
+
+    impact_signal.length = SAMPLE_RATE * IMPACT_DURATION / 1000;
+    impact_signal.wav = (typeof(impact_signal.wav))heap_caps_malloc(impact_signal.length * sizeof(impact_signal.wav[0]), MALLOC_CAP_8BIT);
+    memset(impact_signal.wav, 0, impact_signal.length * sizeof(int16_t));
+
+    vibration_signal.length = SAMPLE_RATE * VIBRATION_DURATION / 1000;
+    vibration_signal.wav = (typeof(vibration_signal.wav))heap_caps_malloc(vibration_signal.length * sizeof(vibration_signal.wav[0]), MALLOC_CAP_8BIT);
+    memset(vibration_signal.wav, 0, vibration_signal.length * sizeof(int16_t));
+
+    mfcc_init();
+
+    // fft_init();
+    impact_fft_operator.init(1024);
+    vibration_fft_operator.init(4096);
+
+}
+
+void edge_detection_task(void *vp_args)
+{
+    while (true)
+    {
+        detect_hammer_edge();
+    }
+}
+
 void give_hammer_detection_semaphore()
 {
     xSemaphoreGive(hammer_edge_detect_smphr);
-}
-void give_fft_processing_semaphore()
-{
-    xSemaphoreGive(fft_processing_smphr);
-}
-void give_mfcc_processing_semaphore()
-{
-    xSemaphoreGive(mfcc_processing_smphr);
-}
-
-fft_data_t *get_fft_data()
-{
-    return &fft_data;
-}
-
-float *get_mfcc_data()
-{
-    return mfcc_out;
 }

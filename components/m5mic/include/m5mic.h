@@ -4,7 +4,6 @@
 #include <esp_mac.h>
 #include <stdint.h>
 #include <math.h>
-#include <audioprocessing.h>
 
 // The higher the sample rate, the higher the frequency results obtained by FFT.
 // If limited to the audible range, 24kHz to 48kHz is sufficient.
@@ -87,7 +86,8 @@ struct wav_data_t
 };
 
 void audio_init();
-void get_audio(void);
+void audio_loop_task(void *pv_args);
+
 wav_data_t *get_wav_data();
 
 #endif

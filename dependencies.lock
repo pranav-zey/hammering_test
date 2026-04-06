@@ -10,7 +10,7 @@ dependencies:
       type: service
     version: 0.3.1
   espressif/esp-dl:
-    component_hash: 5130cf5ba89cb43865da942ddf23b39b1520855907cd91b68d3ad65dcf2305b6
+    component_hash: 3988acc4c6114459c9134b65d9088195c14d43a80193fe2ca2785c1fe0390f36
     dependencies:
     - name: espressif/dl_fft
       registry_url: https://components.espressif.com
@@ -26,15 +26,20 @@ dependencies:
       version: ^0.6.1
     - name: idf
       require: private
-      version: '>=5.3'
+      version: '*'
     source:
       registry_url: https://components.espressif.com/
       type: service
     targets:
     - esp32
-    - esp32s3
+    - esp32c2
+    - esp32c3
+    - esp32c5
+    - esp32c6
     - esp32p4
-    version: 3.2.4
+    - esp32s2
+    - esp32s3
+    version: 3.3.0
   espressif/esp-dsp:
     component_hash: 42dce32d46ac93dc11f60d368e29a830e9661c7345d794b8a45c343479cae636
     dependencies:
@@ -66,28 +71,28 @@ dependencies:
       type: idf
     version: 5.5.2
   m5stack/m5gfx:
-    component_hash: 4c420c89ae7bfe33231dab80b784f4508591279b2a3a935ac849dddb1942d0d5
+    component_hash: f161e9770bd415c79aa167e8441c4cd74dd460cf2c220d0060b51edf84b54e8a
     dependencies: []
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 0.2.17
+    version: 0.2.19
   m5stack/m5unified:
-    component_hash: 1c75bb80654da6c7fcdd11ef7a1cb9b7d6db2e98f96612a4babf12b5e9bc7196
+    component_hash: 3d1509ffd4198f8086d58c1b5fe8838b595e713e31a1c5d3f084d03ea63a9ec2
     dependencies:
     - name: m5stack/m5gfx
       registry_url: https://components.espressif.com
       require: private
-      version: ^0.2.17
+      version: ^0.2.19
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 0.2.11
+    version: 0.2.13
 direct_dependencies:
 - espressif/esp-dl
 - idf
 - m5stack/m5gfx
 - m5stack/m5unified
-manifest_hash: 9e05386d2fbd23b99b1293ae7200e04a5d2efca4d107913079e962d74acbb4c7
+manifest_hash: ee2de646ed8136541688b80949a25a650a3673c0e56f5c1a7d186617a63484cd
 target: esp32
 version: 2.0.0
