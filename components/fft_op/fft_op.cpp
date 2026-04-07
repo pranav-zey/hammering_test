@@ -175,8 +175,8 @@ bool fft_function_t::calculate_fft(wav_data_t *sound_data)
     {
         if (i < sound_data->length)
         {
-            _input_buffer[i * 2] = sinf(2 * M_PI * 1000 * i / SAMPLE_RATE) * _window[i];
-            // _input_buffer[i * 2] = (float)(sound_data->wav[i]) * _window[i];
+            // _input_buffer[i * 2] = sinf(2 * M_PI * 1000 * i / SAMPLE_RATE);
+            _input_buffer[i * 2] = (float)sound_data->wav[i];
             count++;
         }
         else

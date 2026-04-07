@@ -11,7 +11,6 @@
 
 #define TRANSIENT_ENERGY_THERSHOLD 1000
 
-
 fft_function_t impact_fft_operator;
 fft_function_t vibration_fft_operator;
 
@@ -80,6 +79,10 @@ void detect_hammer_edge()
                 for (int i = start_index; i < wave_data->latest_index; i++)
                 {
                     impact_signal.wav[impact_signal.latest_index] = wave_data->wav[i]; // copy the data
+                    if (impact_signal.max_value < abs(wave_data->wav[i]))
+                    {
+                        impact_signal.max_value = wave_data->wav[i];
+                    }
                     impact_signal.latest_index++;
                     // if the impact_signal length is staisfied: exit
                     if (impact_signal.latest_index == impact_signal.length) // buffer is completely filled.
@@ -96,6 +99,10 @@ void detect_hammer_edge()
                 for (int i = start_index; i < wave_data->length; i++)
                 {
                     impact_signal.wav[impact_signal.latest_index] = wave_data->wav[i];
+                    if (impact_signal.max_value < abs(wave_data->wav[i]))
+                    {
+                        impact_signal.max_value = wave_data->wav[i];
+                    }
                     impact_signal.latest_index++;
                     // if the impact_signal length is staisfied: exit
                     if (impact_signal.latest_index == impact_signal.length)
@@ -109,6 +116,10 @@ void detect_hammer_edge()
                 for (int i = 0; i < wave_data->latest_index; i++)
                 {
                     impact_signal.wav[impact_signal.latest_index] = wave_data->wav[i];
+                    if (impact_signal.max_value < abs(wave_data->wav[i]))
+                    {
+                        impact_signal.max_value = wave_data->wav[i];
+                    }
                     impact_signal.latest_index++;
                     // if the impact_signal length is staisfied: exit
                     if (impact_signal.latest_index == impact_signal.length)
@@ -142,6 +153,10 @@ void detect_hammer_edge()
                 for (int i = start_index; i < wave_data->latest_index; i++)
                 {
                     vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i]; // copy the data
+                    if (vibration_signal.max_value < abs(wave_data->wav[i]))
+                    {
+                        vibration_signal.max_value = wave_data->wav[i];
+                    }
                     vibration_signal.latest_index++;
                     // if the impact_signal length is staisfied: exit
                     if (vibration_signal.latest_index == vibration_signal.length) // buffer is completely filled.
@@ -157,6 +172,10 @@ void detect_hammer_edge()
                 for (int i = start_index; i < wave_data->length; i++)
                 {
                     vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
+                    if (vibration_signal.max_value < abs(wave_data->wav[i]))
+                    {
+                        vibration_signal.max_value = wave_data->wav[i];
+                    }
                     vibration_signal.latest_index++;
                     // if the impact_signal length is staisfied: exit
                     if (vibration_signal.latest_index == vibration_signal.length)
@@ -169,6 +188,10 @@ void detect_hammer_edge()
                 for (int i = 0; i < wave_data->latest_index; i++)
                 {
                     vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
+                    if (vibration_signal.max_value < abs(wave_data->wav[i]))
+                    {
+                        vibration_signal.max_value = wave_data->wav[i];
+                    }
                     vibration_signal.latest_index++;
                     // if the impact_signal length is staisfied: exit
                     if (vibration_signal.latest_index == vibration_signal.length)
@@ -221,7 +244,6 @@ void audio_processing_init()
     // fft_init();
     impact_fft_operator.init(1024);
     vibration_fft_operator.init(4096);
-
 }
 
 void edge_detection_task(void *vp_args)

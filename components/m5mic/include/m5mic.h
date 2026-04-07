@@ -27,6 +27,7 @@ struct wav_data_t
     int16_t *wav = nullptr;
     size_t length = 0;
     size_t latest_index = 0;
+    int16_t max_value = 0;
 
     size_t searchEdge(size_t offset, size_t search_length) const
     {
