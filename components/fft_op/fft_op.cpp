@@ -149,15 +149,20 @@ bool fft_function_t::init(int fft_size)
     _current_fft_size = fft_size;
 
     _input_buffer = (float *)heap_caps_malloc(fft_size * 2 * sizeof(float), MALLOC_CAP_8BIT);
+#ifdef USE_HANNING_WINDOW
     _window = (float *)heap_caps_malloc(fft_size * sizeof(float), MALLOC_CAP_8BIT);
+    if (!_window)
+        return false;
+#endif
 
     fdata = (typeof(fdata))heap_caps_malloc((fft_size / 2) * sizeof(fdata[0]), MALLOC_CAP_8BIT);
 
-    if (!_input_buffer || !_window || !fdata)
+    if (!_input_buffer || !fdata)
         return false;
-
+#ifdef USE_HANNING_WINDOW
     // Precompute Hann window
     dsps_wind_hann_f32(_window, _current_fft_size);
+#endif
 
     // Reset peaks
     for (int i = 0; i < 10; i++)
@@ -176,7 +181,11 @@ bool fft_function_t::calculate_fft(wav_data_t *sound_data)
         if (i < sound_data->length)
         {
             // _input_buffer[i * 2] = sinf(2 * M_PI * 1000 * i / SAMPLE_RATE);
+#ifdef USE_HANNING_WINDOW
+            _input_buffer[i * 2] = (float)sound_data->wav[i] * _window[i];
+#else
             _input_buffer[i * 2] = (float)sound_data->wav[i];
+#endif
             count++;
         }
         else
@@ -265,4 +274,17 @@ bool fft_function_t::calculate_fft(wav_data_t *sound_data)
     // printf("Stack remaining: %d bytes\n", uxTaskGetStackHighWaterMark(NULL));
 
     return true;
+}
+
+float fft_function_t::get_dom_freq()
+{
+    return this->dominant_frequency;
+}
+
+void fft_function_t::get_fft_coeff(float *fft_coeff_array)
+{
+    for (int i = 0; i < num_peaks; i++)
+    {
+        fft_coeff_array[i] = this->fft_peaks[i];
+    }
 }

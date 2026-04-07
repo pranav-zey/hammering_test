@@ -8,6 +8,8 @@
 #include "esp_log.h"
 #include "mfcc_op.h"
 #include "fft_op.h"
+#include "svm_model.h"
+#include <iostream>
 
 #define TRANSIENT_ENERGY_THERSHOLD 1000
 
@@ -210,15 +212,37 @@ void detect_hammer_edge()
         // impact signal analysis
         // caclulate FFT for all the samples
         impact_fft_operator.calculate_fft(&impact_signal);
+        float impact_dom_freq = impact_fft_operator.get_dom_freq();
+        float impact_fft_coeff[10];
+        impact_fft_operator.get_fft_coeff(impact_fft_coeff);
         // calculate MFCC for all the samples
+        float impact_mfcc_values[MFCC_NUM_CEPS];
         mfcc_calc_function(&impact_signal, true);
+        get_mfcc_value(impact_mfcc_values,true);
+
         // vibration signal analysis
         // caclulate FFT for all the samples
         vibration_fft_operator.calculate_fft(&vibration_signal);
+        float vibration_dom_freq = vibration_fft_operator.get_dom_freq();
+        float vibration_fft_coeff[10];
+        vibration_fft_operator.get_fft_coeff(vibration_fft_coeff);
         // calculate MFCC for all the samples
+        float vibration_mfcc_values[MFCC_NUM_CEPS];
         mfcc_calc_function(&vibration_signal, false);
+        get_mfcc_value(vibration_mfcc_values,false);
+
+
+        svm_input_struct_t inference_input;
+        inference_input.impact_dom_freq = impact_dom_freq;
+        inference_input.impact_fft_coeff = impact_fft_coeff;
+        inference_input.vibration_dom_freq = vibration_dom_freq;
+        inference_input.vibration_fft_coeff = vibration_fft_coeff;
+        inference_input.impact_mfcc_values = impact_mfcc_values;
+        inference_input.vibration_mfcc_values = vibration_mfcc_values;
 
         // ML model inference
+        int output = svm_predict(&inference_input);
+        ESP_LOGI("Model","output:%d",output);
     }
 }
 

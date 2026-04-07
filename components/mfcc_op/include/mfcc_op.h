@@ -8,6 +8,6 @@
 
 void mfcc_init(void);
 bool mfcc_calc_function(wav_data_t *sound_data, bool is_impact);
-
+void get_mfcc_value(float *mfcc_value, bool is_impact);
 
 #endif

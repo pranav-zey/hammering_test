@@ -4,11 +4,10 @@
 #include "m5mic.h"
 #include "audioprocessing.h"
 
-#ifndef FFT_BITS 
+#ifndef FFT_BITS
 #define FFT_BITS 10
 #define FFT_SIZE (1u << FFT_BITS)
 #endif
-
 
 dl::audio::MFCC *mfcc_op = nullptr;
 dl::audio::MFCC *impact_mfcc_op = nullptr;
@@ -56,4 +55,17 @@ bool mfcc_calc_function(wav_data_t *sound_data, bool is_impact)
         vibration_mfcc_op->process_frame(sound_data->wav, sound_data->length, vibration_mfcc_out);
     }
     return true;
+}
+
+void get_mfcc_value(float *mfcc_value, bool is_impact)
+{
+    float *mfcc_out;
+    if (is_impact)
+        mfcc_out = impact_mfcc_out;
+    else
+        mfcc_out = vibration_mfcc_out;
+    
+    for(int i = 0 ; i< MFCC_NUM_CEPS; i++){
+        mfcc_value[i] = mfcc_out[i];
+    }
 }

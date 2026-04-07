@@ -6,10 +6,14 @@
 #define FFT_BITS 13 // 13  =  8192 samples for 4300 = 100ms samples cover for vibration sound
 #define FFT_SIZE (1u << FFT_BITS)
 
+// #define USE_HANNING_WINDOW
+
 class fft_function_t
 {
 private:
+#ifdef USE_HANNING_WINDOW
     float *_window = nullptr;
+#endif
     float *_input_buffer = nullptr;
     int _current_fft_size = 0;
 
@@ -22,6 +26,8 @@ private:
 public:
     bool init(int fft_size);
     bool calculate_fft(wav_data_t *sound_data);
+    float get_dom_freq();
+    void get_fft_coeff(float *fft_coeff_array);
 };
 
 bool fft_init();
