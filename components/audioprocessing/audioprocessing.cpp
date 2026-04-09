@@ -10,8 +10,9 @@
 #include "fft_op.h"
 #include "svm_model.h"
 #include <iostream>
+#include "m5sdcard.h"
 
-#define TRANSIENT_ENERGY_THERSHOLD 1000
+#define TRANSIENT_ENERGY_THERSHOLD 10000
 
 fft_function_t impact_fft_operator;
 fft_function_t vibration_fft_operator;
@@ -22,6 +23,8 @@ wav_data_t impact_signal;
 wav_data_t vibration_signal;
 
 SemaphoreHandle_t hammer_edge_detect_smphr = NULL;
+
+SemaphoreHandle_t audio_store_wait_smphr = NULL;
 
 void detect_hammer_edge()
 {
@@ -209,6 +212,8 @@ void detect_hammer_edge()
                 break;
             }
         }
+        printf("max value:%d",impact_signal.max_value);
+        give_write_audio_samples_smphr();
         // impact signal analysis
         // caclulate FFT for all the samples
         impact_fft_operator.calculate_fft(&impact_signal);
@@ -218,7 +223,7 @@ void detect_hammer_edge()
         // calculate MFCC for all the samples
         float impact_mfcc_values[MFCC_NUM_CEPS];
         mfcc_calc_function(&impact_signal, true);
-        get_mfcc_value(impact_mfcc_values,true);
+        get_mfcc_value(impact_mfcc_values, true);
 
         // vibration signal analysis
         // caclulate FFT for all the samples
@@ -229,8 +234,7 @@ void detect_hammer_edge()
         // calculate MFCC for all the samples
         float vibration_mfcc_values[MFCC_NUM_CEPS];
         mfcc_calc_function(&vibration_signal, false);
-        get_mfcc_value(vibration_mfcc_values,false);
-
+        get_mfcc_value(vibration_mfcc_values, false);
 
         svm_input_struct_t inference_input;
         inference_input.impact_dom_freq = impact_dom_freq;
@@ -242,7 +246,8 @@ void detect_hammer_edge()
 
         // ML model inference
         int output = svm_predict(&inference_input);
-        ESP_LOGI("Model","output:%d",output);
+        ESP_LOGI("Model", "output:%d", output);
+        xSemaphoreTake(audio_store_wait_smphr, portMAX_DELAY);
     }
 }
 
@@ -253,6 +258,10 @@ void audio_processing_init()
     while (hammer_edge_detect_smphr == NULL)
     {
         hammer_edge_detect_smphr = xSemaphoreCreateBinary();
+    }
+    while (audio_store_wait_smphr == NULL)
+    {
+        audio_store_wait_smphr = xSemaphoreCreateBinary();
     }
 
     impact_signal.length = SAMPLE_RATE * IMPACT_DURATION / 1000;
@@ -281,4 +290,18 @@ void edge_detection_task(void *vp_args)
 void give_hammer_detection_semaphore()
 {
     xSemaphoreGive(hammer_edge_detect_smphr);
+}
+void give_store_wait_semaphore()
+{
+    xSemaphoreGive(audio_store_wait_smphr);
+}
+
+wav_data_t *get_impact_samples()
+{
+    return &impact_signal;
+}
+
+wav_data_t *get_vibration_samples()
+{
+    return &vibration_signal;
 }
