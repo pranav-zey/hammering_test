@@ -22,6 +22,9 @@ wav_data_t *wave_data;
 wav_data_t impact_signal;
 wav_data_t vibration_signal;
 
+audio_features_t impact_features;
+audio_features_t vibration_features;
+
 SemaphoreHandle_t hammer_edge_detect_smphr = NULL;
 
 SemaphoreHandle_t audio_store_wait_smphr = NULL;
@@ -212,37 +215,34 @@ void detect_hammer_edge()
                 break;
             }
         }
-        printf("max value:%d",impact_signal.max_value);
         give_write_audio_samples_smphr();
         // impact signal analysis
         // caclulate FFT for all the samples
         impact_fft_operator.calculate_fft(&impact_signal);
-        float impact_dom_freq = impact_fft_operator.get_dom_freq();
-        float impact_fft_coeff[10];
-        impact_fft_operator.get_fft_coeff(impact_fft_coeff);
+        impact_features.dom_freq = impact_fft_operator.get_dom_freq();
+        impact_fft_operator.get_fft_coeff(impact_features.fft_coeff);
         // calculate MFCC for all the samples
-        float impact_mfcc_values[MFCC_NUM_CEPS];
         mfcc_calc_function(&impact_signal, true);
-        get_mfcc_value(impact_mfcc_values, true);
+        get_mfcc_value(impact_features.mfcc_values, true);
 
         // vibration signal analysis
         // caclulate FFT for all the samples
         vibration_fft_operator.calculate_fft(&vibration_signal);
-        float vibration_dom_freq = vibration_fft_operator.get_dom_freq();
-        float vibration_fft_coeff[10];
-        vibration_fft_operator.get_fft_coeff(vibration_fft_coeff);
+        vibration_features.dom_freq = vibration_fft_operator.get_dom_freq();
+        vibration_fft_operator.get_fft_coeff(vibration_features.fft_coeff);
         // calculate MFCC for all the samples
-        float vibration_mfcc_values[MFCC_NUM_CEPS];
         mfcc_calc_function(&vibration_signal, false);
-        get_mfcc_value(vibration_mfcc_values, false);
+        get_mfcc_value(vibration_features.mfcc_values, false);
+
+        give_write_audio_features_smphr();
 
         svm_input_struct_t inference_input;
-        inference_input.impact_dom_freq = impact_dom_freq;
-        inference_input.impact_fft_coeff = impact_fft_coeff;
-        inference_input.vibration_dom_freq = vibration_dom_freq;
-        inference_input.vibration_fft_coeff = vibration_fft_coeff;
-        inference_input.impact_mfcc_values = impact_mfcc_values;
-        inference_input.vibration_mfcc_values = vibration_mfcc_values;
+        inference_input.impact_dom_freq = impact_features.dom_freq;
+        inference_input.impact_fft_coeff = impact_features.fft_coeff;
+        inference_input.vibration_dom_freq = vibration_features.dom_freq;
+        inference_input.vibration_fft_coeff = vibration_features.fft_coeff;
+        inference_input.impact_mfcc_values = impact_features.mfcc_values;
+        inference_input.vibration_mfcc_values = vibration_features.mfcc_values;
 
         // ML model inference
         int output = svm_predict(&inference_input);
@@ -304,4 +304,13 @@ wav_data_t *get_impact_samples()
 wav_data_t *get_vibration_samples()
 {
     return &vibration_signal;
+}
+
+audio_features_t *get_impact_features()
+{
+    return &impact_features;
+}
+audio_features_t *get_vibration_features()
+{
+    return &vibration_features;
 }

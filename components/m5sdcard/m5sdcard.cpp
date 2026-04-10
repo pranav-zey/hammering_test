@@ -22,8 +22,10 @@ nvs_handle_t file_index_handle;
 int32_t file_index = 0;
 
 SemaphoreHandle_t write_audio_samples_smphr = NULL;
+SemaphoreHandle_t write_audio_features_smphr = NULL;
 
 esp_err_t write_wave_file(wav_data_t *sound_data, char *filename);
+esp_err_t write_features_file(audio_features_t *features, char *filename);
 
 esp_err_t sd_card_init()
 {
@@ -107,6 +109,10 @@ esp_err_t sd_card_init()
     {
         write_audio_samples_smphr = xSemaphoreCreateBinary();
     }
+    while (write_audio_features_smphr == NULL)
+    {
+        write_audio_features_smphr = xSemaphoreCreateBinary();
+    }
     return ESP_OK;
 }
 
@@ -121,7 +127,6 @@ void write_audio_task(void *vp_args)
         impact_samples = get_impact_samples();
         char file_name[100] = "";
         sprintf(file_name, MOUNT_POINT "/impact_sample_%ld.wav", file_index);
-        printf("%s\n",file_name);
         // write Impact samples
         esp_err_t err = write_wave_file(impact_samples, file_name);
         if (err != ESP_OK)
@@ -131,10 +136,10 @@ void write_audio_task(void *vp_args)
             give_store_wait_semaphore();
             continue;
         }
+
         // get vibration samples
         wav_data_t *vibration_samples;
         sprintf(file_name, MOUNT_POINT "/vibration_sample_%ld.wav", file_index);
-        printf("%s\n",file_name);
         vibration_samples = get_vibration_samples();
         // write vibration samples
         err = write_wave_file(vibration_samples, file_name);
@@ -146,6 +151,30 @@ void write_audio_task(void *vp_args)
             continue;
         }
 
+        // write the calculated fft and mfcc into a file.
+        xSemaphoreTake(write_audio_features_smphr, portMAX_DELAY);
+
+        audio_features_t *impact_features = get_impact_features();
+        sprintf(file_name, MOUNT_POINT "/impact_features_%ld.csv", file_index);
+        err = write_features_file(impact_features, file_name);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Cannot write vibration file");
+            // give semaphore to continue execution on hammer edge detection
+            give_store_wait_semaphore();
+            continue;
+        }
+
+        audio_features_t *vibration_features = get_vibration_features();
+        sprintf(file_name, MOUNT_POINT "/vibration_features_%ld.csv", file_index);
+        err = write_features_file(vibration_features, file_name);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Cannot write vibration file");
+            // give semaphore to continue execution on hammer edge detection
+            give_store_wait_semaphore();
+            continue;
+        }
         // store the file index in nvs
         file_index++;
         ESP_LOGI(TAG, "Writing counter to NVS...");
@@ -168,12 +197,16 @@ void give_write_audio_samples_smphr()
 {
     xSemaphoreGive(write_audio_samples_smphr);
 }
+void give_write_audio_features_smphr()
+{
+    xSemaphoreGive(write_audio_features_smphr);
+}
 
 esp_err_t write_wave_file(wav_data_t *sound_data, char *filename)
 {
     uint32_t rate = SAMPLE_RATE; // Sample rate per ms
     uint16_t chan_num = 1;       // Number of channels
-    uint16_t bits = 16;           // Bit depth
+    uint16_t bits = 16;          // Bit depth
     uint32_t length = sound_data->length * chan_num * bits / 8;
     int16_t byte;
 
@@ -181,7 +214,7 @@ esp_err_t write_wave_file(wav_data_t *sound_data, char *filename)
     FILE *fp = fopen(filename, "w");
     if (fp == NULL)
     {
-        ESP_LOGE(TAG, "Output file couldn't be opened:%s (errno: %d, %s)",filename, errno, strerror(errno));
+        ESP_LOGE(TAG, "Output file couldn't be opened:%s (errno: %d, %s)", filename, errno, strerror(errno));
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -215,6 +248,43 @@ esp_err_t write_wave_file(wav_data_t *sound_data, char *filename)
     }
 
     fclose(fp);
-    ESP_LOGI(TAG,"%s file written successfully!",filename); 
+    ESP_LOGI(TAG, "%s file written successfully!", filename);
+    return ESP_OK;
+}
+
+esp_err_t write_features_file(audio_features_t *features, char *filename)
+{
+    // Writes data to wav file
+    FILE *fp = fopen(filename, "w");
+    if (fp == NULL)
+    {
+        ESP_LOGE(TAG, "Output file couldn't be opened:%s (errno: %d, %s)", filename, errno, strerror(errno));
+        return ESP_ERR_NOT_FOUND;
+    }
+    fprintf(fp, "dom_freq,");
+    for (int i = 0; i < 10; i++)
+    {
+        fprintf(fp, "fft_coeff_%d,", i);
+    }
+    for (int i = 0; i < MFCC_NUM_CEPS; i++)
+    {
+        if (i < MFCC_NUM_CEPS - 1)
+            fprintf(fp, "mfcc_coeff_%d,", i);
+        else
+            fprintf(fp, "mfcc_coeff_%d\n", i);
+    }
+    fprintf(fp, "%f,", features->dom_freq);
+    for (int i = 0; i < 10; i++)
+    {
+        fprintf(fp, "%f,", features->fft_coeff[i]);
+    }
+    for (int i = 0; i < MFCC_NUM_CEPS; i++)
+    {
+        if (i < MFCC_NUM_CEPS)
+            fprintf(fp, "%f,", features->mfcc_values[i]);
+        else
+            fprintf(fp, "%f", features->mfcc_values[i]);
+    }
+    fclose(fp);
     return ESP_OK;
 }
