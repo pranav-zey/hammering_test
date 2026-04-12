@@ -7,7 +7,7 @@
 // #include "m5display.h"
 #include "m5mic.h"
 #include "audioprocessing.h"
-
+#include "display_p.h"
 
 void m5_device_init()
 {
@@ -23,7 +23,7 @@ void m5_device_init()
 
     M5.begin(cfg);
 
-    // display_init();
+    display_init();
 
     audio_init();
 

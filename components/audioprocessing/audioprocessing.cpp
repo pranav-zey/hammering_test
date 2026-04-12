@@ -10,6 +10,7 @@
 #include "fft_op.h"
 #include "svm_model.h"
 #include <iostream>
+#include "display_p.h"
 
 #define TRANSIENT_ENERGY_THERSHOLD 1000
 
@@ -27,7 +28,7 @@ void detect_hammer_edge()
 {
     if (xSemaphoreTake(hammer_edge_detect_smphr, portMAX_DELAY))
     {
-
+       // display_clear_result();
         size_t start = (wave_data->length + wave_data->latest_index - WAVE_BLOCK_SIZE) % wave_data->length;
         int lower_bound = abs(wave_data->wav[start]);
         int upper_bound = abs(wave_data->wav[start]);
@@ -243,6 +244,9 @@ void detect_hammer_edge()
         // ML model inference
         int output = svm_predict(&inference_input);
         ESP_LOGI("Model","output:%d",output);
+        display_model_output(output);
+        display_signal_info(impact_dom_freq, vibration_dom_freq);
+        display_wav(&impact_signal, &vibration_signal);
     }
 }
 

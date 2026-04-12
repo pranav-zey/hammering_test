@@ -3,5 +3,6 @@
     "idf.port": "/dev/ttyUSB0",
     "idf.flashType": "UART",
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.defaultPackageManager": "ms-python.python:pip"
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
+    "idf.portWin": "COM10"
 }
