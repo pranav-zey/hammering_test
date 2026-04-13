@@ -7,5 +7,6 @@ esp_err_t sd_card_init();
 void write_audio_task(void *vp_args);
 void give_write_audio_samples_smphr();
 void give_write_audio_features_smphr();
+int32_t get_file_index();
 
 #endif

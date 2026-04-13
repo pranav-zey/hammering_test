@@ -288,3 +288,8 @@ esp_err_t write_features_file(audio_features_t *features, char *filename)
     fclose(fp);
     return ESP_OK;
 }
+
+int32_t get_file_index()
+{
+    return file_index;
+}

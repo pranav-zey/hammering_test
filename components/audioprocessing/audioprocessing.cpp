@@ -11,6 +11,7 @@
 #include "svm_model.h"
 #include <iostream>
 #include "m5sdcard.h"
+#include "m5display.h"
 
 #define TRANSIENT_ENERGY_THERSHOLD 10000
 
@@ -247,6 +248,11 @@ void detect_hammer_edge()
         // ML model inference
         int output = svm_predict(&inference_input);
         ESP_LOGI("Model", "output:%d", output);
+
+        int32_t fileindex = get_file_index();
+        display_model_output(output, fileindex);
+        display_signal_info(impact_features.dom_freq, vibration_features.dom_freq);
+        display_wav(&impact_signal, &vibration_signal);
         xSemaphoreTake(audio_store_wait_smphr, portMAX_DELAY);
     }
 }
