@@ -293,6 +293,18 @@ void edge_detection_task(void *vp_args)
     }
 }
 
+void test_sdcard_samples(void *vp_args)
+{
+    char *impact_filename = MOUNT_POINT "/test_samples/impact_sample_70.wav";
+    char *vibration_filename = MOUNT_POINT "/test_samples/vibration_sample_70.wav";
+    wav_data_t impact_sample;
+    wav_data_t vibration_sample;
+    while (true)
+    {
+        get_audio_sample(impact_filename, &impact_sample);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
 void give_hammer_detection_semaphore()
 {
     xSemaphoreGive(hammer_edge_detect_smphr);

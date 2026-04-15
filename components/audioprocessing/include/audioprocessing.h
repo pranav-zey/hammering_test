@@ -15,6 +15,7 @@ struct audio_features_t
 
 void audio_processing_init();
 void edge_detection_task(void *vp_args);
+void test_sdcard_samples(void *vp_args);
 void give_hammer_detection_semaphore();
 void give_store_wait_semaphore();
 wav_data_t *get_impact_samples();

@@ -13,7 +13,6 @@
 #include "audioprocessing.h"
 #include "errno.h"
 
-#define MOUNT_POINT "/sdcard"
 static const char *TAG = "sdcard";
 
 #define FILE_INDEX_NVS_KEY "file_index_key"
@@ -292,4 +291,51 @@ esp_err_t write_features_file(audio_features_t *features, char *filename)
 int32_t get_file_index()
 {
     return file_index;
+}
+
+esp_err_t get_audio_sample(char *filename, wav_data_t *sound_data)
+{
+    FILE *fp = fopen(filename, "rb");
+    if (fp == NULL)
+    {
+        ESP_LOGE(TAG, "File couldn't be opened:%s (errno: %d, %s)", filename, errno, strerror(errno));
+        return ESP_ERR_NOT_FOUND;
+    }
+    typedef struct
+    {
+        char riff[4]; // "RIFF"
+        uint32_t overall_size;
+
+        char wave[4]; // "WAVE"
+
+        char fmt_chunk_marker[4]; // "fmt "
+        uint32_t length_of_fmt;   // 16 for PCM
+        uint16_t format_type;     // 1 = PCM
+        uint16_t channels;
+        uint32_t sample_rate;
+        uint32_t byterate;
+        uint16_t block_align;
+        uint16_t bits_per_sample;
+
+        char data_chunk_header[4]; // "data"
+        uint32_t data_size;
+    } wav_header_t;
+
+    wav_header_t header;
+
+    fread(&header, sizeof(wav_header_t), 1, fp);
+
+    int length = header.data_size / (header.channels * (header.bits_per_sample / 8));
+    // Allocate buffer for audio data
+
+    sound_data->length = length;
+    if (sound_data->wav != nullptr)
+        heap_caps_free(sound_data->wav);
+    sound_data->wav = (typeof(sound_data->wav))heap_caps_malloc(sound_data->length * sizeof(sound_data->wav[0]), MALLOC_CAP_8BIT);
+
+    fread(sound_data->wav, sizeof(int16_t), length, fp);
+
+    fclose(fp);
+
+    return ESP_OK;
 }

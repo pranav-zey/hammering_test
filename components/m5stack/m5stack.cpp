@@ -10,6 +10,8 @@
 #include "audioprocessing.h"
 #include "m5sdcard.h"
 
+#define SDCARD_DATA_TEST
+
 void m5_device_init()
 {
     esp_err_t err = nvs_flash_init();
@@ -33,17 +35,17 @@ void m5_device_init()
 #endif
 
     M5.begin(cfg);
-
     display_init();
-
-    audio_init();
-
-    audio_processing_init();
-
     sd_card_init();
+
+#ifndef SDCARD_DATA_TEST
+    audio_init();
+    audio_processing_init();
 
     xTaskCreatePinnedToCore(audio_loop_task, "AUDIO_LOOP", 8192, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(edge_detection_task, "TRANSIENT_DETECTION", 16384, NULL, 7, NULL, 1);
     xTaskCreatePinnedToCore(write_audio_task, "SDCARD_LOOP", 8192, NULL, 6, NULL, 0);
-    // xTaskCreatePinnedToCore(display_loop_task, "DISPLAY_LOOP", 4096, NULL, 5, NULL, 1);
+#else
+    xTaskCreatePinnedToCore(test_sdcard_samples, "TEST_SAMPLES", 16384, NULL, 7, NULL, 1);
+#endif
 }
