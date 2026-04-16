@@ -295,14 +295,51 @@ void edge_detection_task(void *vp_args)
 
 void test_sdcard_samples(void *vp_args)
 {
-    char *impact_filename = MOUNT_POINT "/test_samples/impact_sample_70.wav";
-    char *vibration_filename = MOUNT_POINT "/test_samples/vibration_sample_70.wav";
-    wav_data_t impact_sample;
-    wav_data_t vibration_sample;
+    char *impact_filename = MOUNT_POINT TEST_DIR "/impact_sample_70.wav";
+    char *vibration_filename = MOUNT_POINT TEST_DIR "/vibration_sample_70.wav";
     while (true)
     {
-        get_audio_sample(impact_filename, &impact_sample);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        // get the audio samples
+        get_audio_sample(impact_filename, &impact_signal);
+        get_audio_sample(vibration_filename, &vibration_signal);
+
+        // impact signal analysis
+        // caclulate FFT for all the samples
+        impact_fft_operator.calculate_fft(&impact_signal);
+        impact_features.dom_freq = impact_fft_operator.get_dom_freq();
+        impact_fft_operator.get_fft_coeff(impact_features.fft_coeff);
+        // calculate MFCC for all the samples
+        mfcc_calc_function(&impact_signal, true);
+        get_mfcc_value(impact_features.mfcc_values, true);
+
+        // vibration signal analysis
+        // caclulate FFT for all the samples
+        vibration_fft_operator.calculate_fft(&vibration_signal);
+        vibration_features.dom_freq = vibration_fft_operator.get_dom_freq();
+        vibration_fft_operator.get_fft_coeff(vibration_features.fft_coeff);
+        // calculate MFCC for all the samples
+        mfcc_calc_function(&vibration_signal, false);
+        get_mfcc_value(vibration_features.mfcc_values, false);
+
+        svm_input_struct_t inference_input;
+        inference_input.impact_dom_freq = impact_features.dom_freq;
+        inference_input.impact_fft_coeff = impact_features.fft_coeff;
+        inference_input.vibration_dom_freq = vibration_features.dom_freq;
+        inference_input.vibration_fft_coeff = vibration_features.fft_coeff;
+        inference_input.impact_mfcc_values = impact_features.mfcc_values;
+        inference_input.vibration_mfcc_values = vibration_features.mfcc_values;
+
+        // ML model inference
+        int output = svm_predict(&inference_input);
+        ESP_LOGI("Model", "output:%d", output);
+        write_output_log(impact_filename, vibration_filename, output);
+
+        int32_t fileindex = get_file_index();
+        display_model_output(output, fileindex);
+        display_signal_info(impact_features.dom_freq, vibration_features.dom_freq);
+        display_wav(&impact_signal, &vibration_signal);
+
+        vTaskDelay(portMAX_DELAY);
     }
 }
 void give_hammer_detection_semaphore()

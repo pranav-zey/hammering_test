@@ -37,10 +37,10 @@ void m5_device_init()
     M5.begin(cfg);
     display_init();
     sd_card_init();
+    audio_processing_init();
 
 #ifndef SDCARD_DATA_TEST
     audio_init();
-    audio_processing_init();
 
     xTaskCreatePinnedToCore(audio_loop_task, "AUDIO_LOOP", 8192, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(edge_detection_task, "TRANSIENT_DETECTION", 16384, NULL, 7, NULL, 1);

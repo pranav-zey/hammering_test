@@ -12,6 +12,7 @@
 #include "m5mic.h"
 #include "audioprocessing.h"
 #include "errno.h"
+#include "unistd.h"
 
 static const char *TAG = "sdcard";
 
@@ -288,6 +289,35 @@ esp_err_t write_features_file(audio_features_t *features, char *filename)
     return ESP_OK;
 }
 
+esp_err_t write_output_log(char *impact_filename, char *vibration_filename, int output)
+{
+    FILE *fp;
+    if (access(MOUNT_POINT TEST_LOG_FILE, F_OK) == 0)
+    {
+        // file exists
+        fp = fopen(MOUNT_POINT TEST_LOG_FILE, "a");
+        if (fp == NULL)
+        {
+            ESP_LOGE(TAG, "Output file couldn't be opened:%s (errno: %d, %s)", MOUNT_POINT TEST_LOG_FILE, errno, strerror(errno));
+            return ESP_ERR_NOT_FOUND;
+        }
+    }
+    else
+    {
+        // file doesn't exist
+        ESP_LOGI(TAG, "File doesn't exist");
+        fp = fopen(MOUNT_POINT TEST_LOG_FILE, "w");
+        if (fp == NULL)
+        {
+            ESP_LOGE(TAG, "Output file couldn't be opened:%s (errno: %d, %s)", MOUNT_POINT TEST_LOG_FILE, errno, strerror(errno));
+            return ESP_ERR_NOT_FOUND;
+        }
+        fprintf(fp, "impact_sample, vibrations_sample, output\n");
+    }
+    fprintf(fp, "%s, %s ,%d\n", impact_filename, vibration_filename, output);
+    fclose(fp);
+    return ESP_OK;
+}
 int32_t get_file_index()
 {
     return file_index;
@@ -327,7 +357,6 @@ esp_err_t get_audio_sample(char *filename, wav_data_t *sound_data)
 
     int length = header.data_size / (header.channels * (header.bits_per_sample / 8));
     // Allocate buffer for audio data
-
     sound_data->length = length;
     if (sound_data->wav != nullptr)
         heap_caps_free(sound_data->wav);

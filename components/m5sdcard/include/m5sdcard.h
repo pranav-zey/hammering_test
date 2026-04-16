@@ -4,6 +4,8 @@
 #include "m5mic.h"
 
 #define MOUNT_POINT "/sdcard"
+#define TEST_LOG_FILE "/inference_test.csv"
+#define TEST_DIR "/test_samples"
 
 esp_err_t sd_card_init();
 
@@ -13,5 +15,6 @@ void give_write_audio_features_smphr();
 int32_t get_file_index();
 
 esp_err_t get_audio_sample(char *filename, wav_data_t *sound_data);
+esp_err_t write_output_log(char *impact_filename, char *vibration_filename, int output);
 
 #endif
