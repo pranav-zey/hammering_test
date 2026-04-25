@@ -4,8 +4,13 @@
 #include "m5mic.h"
 
 #define MOUNT_POINT "/sdcard"
+
+// File storing the inference result.
 #define TEST_LOG_FILE "/inference_test.csv"
-#define TEST_DIR "/test_samples"
+
+// Directory containing the samples in SD card.
+#define TEST_DIR "/good_bricks"
+#define MAX_FILES 3100
 
 esp_err_t sd_card_init();
 

@@ -10,6 +10,7 @@
 #include "audioprocessing.h"
 #include "m5sdcard.h"
 
+// Macro to use either the mic samples or the test samples from sd card.
 #define SDCARD_DATA_TEST
 
 void m5_device_init()
