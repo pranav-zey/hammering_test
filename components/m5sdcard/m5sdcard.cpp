@@ -1,3 +1,5 @@
+//m5sdcard.cpp
+
 #include <stdio.h>
 #include "m5sdcard.h"
 #include "esp_err.h"
@@ -12,7 +14,7 @@
 #include "m5mic.h"
 #include "audioprocessing.h"
 #include "errno.h"
-#include "unistd.h"
+#include "esp_timer.h"
 
 static const char *TAG = "sdcard";
 
@@ -128,6 +130,7 @@ void write_audio_task(void *vp_args)
         char file_name[100] = "";
         sprintf(file_name, MOUNT_POINT "/impact_sample_%ld.wav", file_index);
         // write Impact samples
+        int64_t t0 = esp_timer_get_time();
         esp_err_t err = write_wave_file(impact_samples, file_name);
         if (err != ESP_OK)
         {
@@ -168,6 +171,10 @@ void write_audio_task(void *vp_args)
         audio_features_t *vibration_features = get_vibration_features();
         sprintf(file_name, MOUNT_POINT "/vibration_features_%ld.csv", file_index);
         err = write_features_file(vibration_features, file_name);
+        int64_t t4 = esp_timer_get_time();
+
+        ESP_LOGI("SD CARD", "Time taken for writing files in sd card: %lld microseconds", (t4 - t0));
+
         if (err != ESP_OK)
         {
             ESP_LOGE(TAG, "Cannot write vibration file");
