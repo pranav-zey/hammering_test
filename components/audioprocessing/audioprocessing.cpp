@@ -1,4 +1,4 @@
-//audioprocessing.cpp
+// audioprocessing.cpp
 
 #include <stdio.h>
 #include "audioprocessing.h"
@@ -15,6 +15,8 @@
 #include "m5sdcard.h"
 #include "m5display.h"
 #include "esp_timer.h"
+
+#define SINGLE_FILE_SAMPLE
 
 #define TRANSIENT_ENERGY_THERSHOLD 10000
 
@@ -158,115 +160,155 @@ void detect_hammer_edge()
             start_index = wave_data->latest_index - WAVE_BLOCK_SIZE;
         }
 
-            if (wave_data->latest_index > start_index) // there data in no wrapped around the buffer.
+        if (wave_data->latest_index > start_index) // there data in no wrapped around the buffer.
+        {
+            for (int i = start_index; i < wave_data->latest_index; i++)
             {
-                for (int i = start_index; i < wave_data->latest_index; i++)
+                vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i]; // copy the data
+                if (vibration_signal.max_value < abs(wave_data->wav[i]))
                 {
-                    vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i]; // copy the data
-                    if (vibration_signal.max_value < abs(wave_data->wav[i]))
-                    {
-                        vibration_signal.max_value = wave_data->wav[i];
-                    }
-                    vibration_signal.latest_index++;
-                    // if the impact_signal length is staisfied: exit
-                    if (vibration_signal.latest_index == vibration_signal.length) // buffer is completely filled.
-                    {
-                        complete_samples = true;
-                        break;
-                    }
+                    vibration_signal.max_value = wave_data->wav[i];
                 }
-            }
-            else // data is wrapped around the buffer.
-            {
-                // samples from the point of start to end of the audio buffer
-                for (int i = start_index; i < wave_data->length; i++)
+                vibration_signal.latest_index++;
+                // if the impact_signal length is staisfied: exit
+                if (vibration_signal.latest_index == vibration_signal.length) // buffer is completely filled.
                 {
-                    vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
-                    if (vibration_signal.max_value < abs(wave_data->wav[i]))
-                    {
-                        vibration_signal.max_value = wave_data->wav[i];
-                    }
-                    vibration_signal.latest_index++;
-                    // if the impact_signal length is staisfied: exit
-                    if (vibration_signal.latest_index == vibration_signal.length)
-                    {
-                        complete_samples = true;
-                        break;
-                    }
+                    complete_samples = true;
+                    break;
                 }
-                // samples from start of the buffer to end of new index.
-                for (int i = 0; i < wave_data->latest_index; i++)
-                {
-                    vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
-                    if (vibration_signal.max_value < abs(wave_data->wav[i]))
-                    {
-                        vibration_signal.max_value = wave_data->wav[i];
-                    }
-                    vibration_signal.latest_index++;
-                    // if the impact_signal length is staisfied: exit
-                    if (vibration_signal.latest_index == vibration_signal.length)
-                    {
-                        complete_samples = true;
-                        break;
-                    }
-                }
-            }
-            if (complete_samples)
-            {
-                ESP_LOGI("VIBRATION SAMPLES", "Number of samples:%d", vibration_signal.latest_index);
-                break;
             }
         }
-        give_write_audio_samples_smphr();
-        // impact signal analysis
-        // caclulate FFT for all the samples
-        int64_t t0 = esp_timer_get_time();
-
-        impact_fft_operator.calculate_fft(&impact_signal);
-        impact_features.dom_freq = impact_fft_operator.get_dom_freq();
-        impact_fft_operator.get_fft_coeff(impact_features.fft_coeff);
-        // calculate MFCC for all the samples
-        mfcc_calc_function(&impact_signal, true);
-        get_mfcc_value(impact_features.mfcc_values, true);
-
-        // vibration signal analysis
-        // caclulate FFT for all the samples
-        vibration_fft_operator.calculate_fft(&vibration_signal);
-        vibration_features.dom_freq = vibration_fft_operator.get_dom_freq();
-        vibration_fft_operator.get_fft_coeff(vibration_features.fft_coeff);
-        // calculate MFCC for all the samples
-        mfcc_calc_function(&vibration_signal, false);
-        get_mfcc_value(vibration_features.mfcc_values, false);
-
-        int64_t t1 = esp_timer_get_time();
-        ESP_LOGI("AUDIO PROCESSING", "Time taken for total audio processing(fft + mfcc): %lld microseconds", (t1 - t0));
-
-    give_write_audio_features_smphr();
-
-        svm_input_struct_t inference_input;
-        inference_input.impact_dom_freq = impact_features.dom_freq;
-        inference_input.impact_fft_coeff = impact_features.fft_coeff;
-        inference_input.vibration_dom_freq = vibration_features.dom_freq;
-        inference_input.vibration_fft_coeff = vibration_features.fft_coeff;
-        inference_input.impact_mfcc_values = impact_features.mfcc_values;
-        inference_input.vibration_mfcc_values = vibration_features.mfcc_values;
-
-        // ML model inference
-        int64_t t2 = esp_timer_get_time();
-        int output = svm_predict(&inference_input);
-        int64_t t3 = esp_timer_get_time();
-
-        ESP_LOGI("AUDIO PROCESSING", "Time taken for SVM inference: %lld microseconds", (t3 - t2));
-        ESP_LOGI("Model", "output:%d", output);
-
-        int32_t fileindex = get_file_index();
-        display_model_output(output, fileindex);
-        display_signal_info(impact_features.dom_freq, vibration_features.dom_freq);
-        display_wav(&impact_signal, &vibration_signal);
-        xSemaphoreTake(audio_store_wait_smphr, portMAX_DELAY);
+        else // data is wrapped around the buffer.
+        {
+            // samples from the point of start to end of the audio buffer
+            for (int i = start_index; i < wave_data->length; i++)
+            {
+                vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
+                if (vibration_signal.max_value < abs(wave_data->wav[i]))
+                {
+                    vibration_signal.max_value = wave_data->wav[i];
+                }
+                vibration_signal.latest_index++;
+                // if the impact_signal length is staisfied: exit
+                if (vibration_signal.latest_index == vibration_signal.length)
+                {
+                    complete_samples = true;
+                    break;
+                }
+            }
+            // samples from start of the buffer to end of new index.
+            for (int i = 0; i < wave_data->latest_index; i++)
+            {
+                vibration_signal.wav[vibration_signal.latest_index] = wave_data->wav[i];
+                if (vibration_signal.max_value < abs(wave_data->wav[i]))
+                {
+                    vibration_signal.max_value = wave_data->wav[i];
+                }
+                vibration_signal.latest_index++;
+                // if the impact_signal length is staisfied: exit
+                if (vibration_signal.latest_index == vibration_signal.length)
+                {
+                    complete_samples = true;
+                    break;
+                }
+            }
+        }
+        if (complete_samples)
+        {
+            ESP_LOGI("VIBRATION SAMPLES", "Number of samples:%d", vibration_signal.latest_index);
+            break;
+        }
     }
 }
 
+void get_input_features(svm_input_struct_t *inference_input)
+{
+    // impact signal analysis
+    // caclulate FFT for all the samples
+    int64_t t0 = esp_timer_get_time();
+
+    impact_fft_operator.calculate_fft(&impact_signal);
+    impact_features.dom_freq = impact_fft_operator.get_dom_freq();
+    impact_fft_operator.get_fft_coeff(impact_features.fft_coeff);
+    // calculate MFCC for all the samples
+    mfcc_calc_function(&impact_signal, true);
+    get_mfcc_value(impact_features.mfcc_values, true);
+
+    // vibration signal analysis
+    // caclulate FFT for all the samples
+    vibration_fft_operator.calculate_fft(&vibration_signal);
+    vibration_features.dom_freq = vibration_fft_operator.get_dom_freq();
+    vibration_fft_operator.get_fft_coeff(vibration_features.fft_coeff);
+    // calculate MFCC for all the samples
+    mfcc_calc_function(&vibration_signal, false);
+    get_mfcc_value(vibration_features.mfcc_values, false);
+
+    int64_t t1 = esp_timer_get_time();
+    ESP_LOGI("AUDIO PROCESSING", "Time taken for total audio processing(fft + mfcc): %lld microseconds", (t1 - t0));
+
+    give_write_audio_features_smphr();
+
+    inference_input->impact_dom_freq = impact_features.dom_freq;
+    inference_input->impact_fft_coeff = impact_features.fft_coeff;
+    inference_input->vibration_dom_freq = vibration_features.dom_freq;
+    inference_input->vibration_fft_coeff = vibration_features.fft_coeff;
+    inference_input->impact_mfcc_values = impact_features.mfcc_values;
+    inference_input->vibration_mfcc_values = vibration_features.mfcc_values;
+}
+
+void detect_hammer_edge_complete_samples(wav_data_t *sound_data)
+{
+    size_t start = 0;
+    int lower_bound = abs(sound_data->wav[start]);
+    int upper_bound = abs(sound_data->wav[start]);
+    int lower_bound_index = start;
+    for (size_t i = 1; i < sound_data->length; i++)
+    {
+        int value = abs(sound_data->wav[i]);
+        if (value < upper_bound)
+        {
+            lower_bound = value;
+            lower_bound_index = i;
+            upper_bound = value;
+        }
+        else
+        {
+            upper_bound = value;
+        }
+        int lower_energy = lower_bound * lower_bound;
+        int upper_energy = upper_bound * upper_bound;
+        int energy_difference = upper_bound - lower_bound;
+        if (energy_difference > TRANSIENT_ENERGY_THERSHOLD)
+        {
+            ESP_LOGI("TRANSIENT", " Transient detected:%d, lower bound: %d, upper bound: %d", energy_difference, lower_energy, upper_energy);
+            // Reset the impact signal and vibration signal to read the new samples.
+            impact_signal.latest_index = 0;
+            vibration_signal.latest_index = 0;
+            transient_detected = true;
+            break;
+        }
+    }
+
+    if (!transient_detected)
+    {
+        return;
+    }
+    int sound_data_index = lower_bound_index;
+    while (impact_signal.latest_index < impact_signal.length)
+    {
+        impact_signal.wav[impact_signal.latest_index] = sound_data->wav[sound_data_index];
+        impact_signal.latest_index++;
+        sound_data_index++;
+    }
+    ESP_LOGI("IMPACT SAMPLES", "Number of samples:%d", impact_signal.latest_index);
+    while (vibration_signal.latest_index < vibration_signal.length)
+    {
+        vibration_signal.wav[vibration_signal.latest_index] = sound_data->wav[sound_data_index];
+        vibration_signal.latest_index++;
+        sound_data_index++;
+    }
+    ESP_LOGI("VIBRATION SAMPLES", "Number of samples:%d", vibration_signal.latest_index);
+}
 void audio_processing_init()
 {
     wave_data = get_wav_data();

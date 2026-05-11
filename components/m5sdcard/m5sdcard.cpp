@@ -1,4 +1,4 @@
-//m5sdcard.cpp
+// m5sdcard.cpp
 
 #include <stdio.h>
 #include "m5sdcard.h"
@@ -14,6 +14,7 @@
 #include "m5mic.h"
 #include "audioprocessing.h"
 #include "errno.h"
+#include "unistd.h"
 #include "esp_timer.h"
 
 static const char *TAG = "sdcard";
